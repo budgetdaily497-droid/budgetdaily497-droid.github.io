@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photobooth 3 Frame</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#f4eee8;
+  color:#4d3a31;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+}
+.app{
+  width:100%;
+  max-width:1100px;
+  padding:28px 18px 50px;
+}
+h1{text-align:center;margin:0 0 6px;font-size:30px}
+.sub{text-align:center;margin:0 0 24px;color:#806d62}
+.layout{
+  display:grid;
+  grid-template-columns:minmax(280px,1fr) 360px;
+  gap:28px;
+  align-items:start;
+}
+.card{
+  background:white;
+  border-radius:18px;
+  padding:18px;
+  box-shadow:0 8px 30px rgba(0,0,0,.08);
+}
+video{
+  width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+  border-radius:14px;
+  background:#222;
+  transform:scaleX(-1);
+}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button{
+  border:0;
+  border-radius:999px;
+  padding:12px 18px;
+  font-weight:700;
+  cursor:pointer;
+  background:#806453;
+  color:white;
+}
+button.secondary{background:#eee5de;color:#4d3a31}
+button:disabled{opacity:.45;cursor:not-allowed}
+#countdown{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  font-size:110px;
+  font-weight:800;
+  color:white;
+  background:rgba(0,0,0,.35);
+  z-index:5;
+}
+.result-wrap{display:flex;justify-content:center}
+canvas{
+  width:100%;
+  max-width:330px;
+  height:auto;
+  display:block;
+  background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+.small{font-size:13px;color:#8b7b72;line-height:1.5}
+.photo-list{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-top:12px;
+}
+.photo-list img{
+  width:100%;
+  aspect-ratio:1/1;
+  object-fit:cover;
+  border-radius:8px;
+  background:#eee;
+}
+@media(max-width:800px){
+  .layout{grid-template-columns:1fr}
+  .card{max-width:520px;margin:auto;width:100%}
+}
+</style>
+</head>
+<body>
+<div id="countdown">3</div>
+
+<div class="app">
+  <h1>PHOTOBOOTH</h1>
+  <p class="sub">3 Frame • Ambil Foto • Download JPG</p>
+
+  <div class="layout">
+    <div class="card">
+      <video id="video" autoplay playsinline></video>
+
+      <div class="controls">
+        <button id="startBtn">Aktifkan Kamera</button>
+        <button id="takeBtn" disabled>📸 Ambil 3 Foto</button>
+        <button id="resetBtn" class="secondary">Ulangi</button>
+      </div>
+
+      <p class="small">
+        Izinkan akses kamera saat browser meminta izin. Setelah tombol
+        "Ambil 3 Foto" ditekan, sistem mengambil 3 foto dengan countdown.
+      </p>
+
+      <div class="photo-list">
+        <img id="p1" alt="Foto 1">
+        <img id="p2" alt="Foto 2">
+        <img id="p3" alt="Foto 3">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Hasil Template</h2>
+      <div class="result-wrap">
+        <canvas id="output" width="900" height="1600"></canvas>
+      </div>
+
+      <div class="controls">
+        <button id="downloadBtn" disabled>⬇ Download JPG</button>
+      </div>
+
+      <p class="small">
+        Template sementara dibuat 3 frame vertikal. Nanti bagian ini bisa
+        diganti dengan desain kamu sendiri dari Illustrator/Canva.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const video = document.getElementById('video');
+const startBtn = document.getElementById('startBtn');
+const takeBtn = document.getElementById('takeBtn');
+const resetBtn = document.getElementById('resetBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const countdown = document.getElementById('countdown');
+const canvas = document.getElementById('output');
+const ctx = canvas.getContext('2d');
+
+const imgs = [
+  document.getElementById('p1'),
+  document.getElementById('p2'),
+  document.getElementById('p3')
+];
+
+let stream = null;
+let photos = [];
+
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function startCamera(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:"user", width:{ideal:1280}, height:{ideal:720}},
+      audio:false
+    });
+    video.srcObject = stream;
+    takeBtn.disabled = false;
+    startBtn.textContent = "Kamera Aktif";
+  }catch(err){
+    alert("Kamera tidak bisa diakses. Pastikan izin kamera diberikan dan website dibuka melalui HTTPS atau localhost.");
+  }
+}
+
+async function countDown(){
+  countdown.style.display='flex';
+  for(let n=3;n>=1;n--){
+    countdown.textContent=n;
+    await wait(800);
+  }
+  countdown.style.display='none';
+}
+
+function capture(){
+  const c=document.createElement('canvas');
+  c.width=900;c.height=675;
+  const x=c.getContext('2d');
+
+  x.save();
+  x.translate(c.width,0);
+  x.scale(-1,1);
+  x.drawImage(video,0,0,c.width,c.height);
+  x.restore();
+
+  return c.toDataURL('image/jpeg',0.92);
+}
+
+async function takePhotos(){
+  takeBtn.disabled=true;
+  photos=[];
+
+  for(let i=0;i<3;i++){
+    await countDown();
+    const data=capture();
+    photos.push(data);
+    imgs[i].src=data;
+    await wait(500);
+  }
+
+  drawResult();
+  downloadBtn.disabled=false;
+  takeBtn.disabled=false;
+}
+
+function loadImage(src){
+  return new Promise((resolve,reject)=>{
+    const im=new Image();
+    im.onload=()=>resolve(im);
+    im.onerror=reject;
+    im.src=src;
+  });
+}
+
+async function drawResult(){
+  // Background
+  ctx.fillStyle='#fbf7f2';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Header
+  ctx.fillStyle='#6f5648';
+  ctx.textAlign='center';
+  ctx.font='42px Georgia';
+  ctx.fillText('PHOTOBOOTH',450,65);
+
+  ctx.font='26px Georgia';
+  ctx.fillStyle='#8b6f60';
+  ctx.fillText('SPECIAL MOMENT',450,105);
+
+  const top=135;
+  const gap=25;
+  const frameH=420;
+  const frameW=760;
+  const left=(900-frameW)/2;
+
+  for(let i=0;i<3;i++){
+    const im=await loadImage(photos[i]);
+
+    // frame
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(left-8,top+i*(frameH+gap)-8,frameW+16,frameH+16);
+
+    // crop to portrait-ish area inside each frame
+    const ratio=Math.max(frameW/im.width, frameH/im.height);
+    const sw=frameW/ratio;
+    const sh=frameH/ratio;
+    const sx=(im.width-sw)/2;
+    const sy=(im.height-sh)/2;
+
+    ctx.drawImage(im,sx,sy,sw,sh,left,top+i*(frameH+gap),frameW,frameH);
+  }
+
+  // Footer
+  ctx.fillStyle='#7a5e4f';
+  ctx.font='30px Georgia';
+  ctx.fillText('YOUR SPECIAL DAY',450,1535);
+
+  ctx.font='22px Arial';
+  ctx.fillStyle='#9b887c';
+  ctx.fillText(new Date().toLocaleDateString('id-ID'),450,1575);
+}
+
+function reset(){
+  photos=[];
+  imgs.forEach(i=>{i.removeAttribute('src');});
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#fbf7f2';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#8b6f60';
+  ctx.textAlign='center';
+  ctx.font='34px Georgia';
+  ctx.fillText('HASIL PHOTOBOOTH',450,800);
+  downloadBtn.disabled=true;
+}
+
+downloadBtn.addEventListener('click',()=>{
+  const a=document.createElement('a');
+  a.download='photobooth-3-frame.jpg';
+  a.href=canvas.toDataURL('image/jpeg',0.95);
+  a.click();
+});
+
+startBtn.addEventListener('click',startCamera);
+takeBtn.addEventListener('click',takePhotos);
+resetBtn.addEventListener('click',reset);
+
+reset();
+</script>
+</body>
+</html>
